@@ -19,7 +19,7 @@ class MovementController extends Controller
     public function store(Request $request)
     {
         Movement::create([
-            'user_id' => 1, // ID fijo temporalmente hasta que conectemos el login
+            'user_id' => auth()->id(),
             'category_id' => $request->category_id,
             'type' => $request->type,
             'amount' => $request->amount,
