@@ -6,10 +6,11 @@
     <title>MoneyWay - Registrar Movimiento</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
+
+
 <body class="bg-slate-50 text-slate-800 font-sans p-8">
     <div class="max-w-xl mx-auto bg-white p-6 rounded-lg shadow-md">
-        <h2 class="text-2xl font-bold text-teal-700 mb-6">Registrar manual</h2>
-
+        
         <!-- Mensaje de éxito tras guardar -->
         @if(session('success'))
             <div class="bg-green-100 text-green-800 p-3 rounded mb-4">
@@ -17,8 +18,18 @@
             </div>
         @endif
 
+
+            <div class="flex justify-between items-center mb-6">
+            <h2 class="text-2xl font-bold text-teal-700">Registrar manual</h2>
+            <a href="/historial" style="background-color: #117964; color: white; padding: 8px 16px; text-decoration: none; border-radius: 6px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                Ver Historial
+            </a>
+        </div>
+
+
+
         <form action="{{ route('movements.store') }}" method="POST">
-            @csrf <!-- Token de seguridad de Laravel -->
+            @csrf
             
             <div class="mb-4 flex space-x-4">
                 <div class="w-1/2">

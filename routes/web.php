@@ -13,3 +13,5 @@ Route::post('/registrar', [MovementController::class, 'store'])->name('movements
 
 Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login');
 Route::post('/login', [AuthController::class, 'login'])->name('login.post');
+
+Route::get('/historial', [MovementController::class, 'index'])->name('movements.index');
