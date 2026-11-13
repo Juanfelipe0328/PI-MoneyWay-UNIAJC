@@ -46,13 +46,13 @@
     </div>
 </div>
 
-{{-- Pestañas --}}
+{{-- Pestanas --}}
 <ul class="nav nav-underline nav-fill mb-3" role="tablist">
     <li class="nav-item" role="presentation">
-        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#agregar" type="button" role="tab">Agregar transacción</button>
+        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#agregar" type="button" role="tab">Agregar transaccion</button>
     </li>
     <li class="nav-item" role="presentation">
-        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#categorias" type="button" role="tab">Categorías</button>
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#categorias" type="button" role="tab">Categorias</button>
     </li>
     <li class="nav-item" role="presentation">
         <button class="nav-link" data-bs-toggle="tab" data-bs-target="#historial" type="button" role="tab">Historial</button>
@@ -65,59 +65,13 @@
     <div class="tab-pane fade show active" id="agregar" role="tabpanel">
         <div class="card border-0 shadow-sm">
             <div class="card-body p-4">
-                <h2 class="h5 fw-bold mb-3">Agregar nueva transacción</h2>
+                <h2 class="h5 fw-bold mb-3">Agregar nueva transaccion</h2>
 
                 <form action="{{ route('movements.store') }}" method="POST">
                     @csrf
                     <div class="row g-3">
 
-                        <div class="col-md-4">
-                            <label for="amount" class="form-label">Valor (COP)</label>
-                            <input type="number" step="0.01" min="0" name="amount" id="amount"
-                                   value="{{ old('amount') }}" placeholder="Ej. 45000"
-                                   class="form-control @error('amount') is-invalid @enderror" required>
-                            @error('amount') <div class="invalid-feedback">{{ $message }}</div> @enderror
-                        </div>
-
-                        <div class="col-md-4">
-                            <label for="type" class="form-label">Tipo</label>
-                            <select name="type" id="type" class="form-select @error('type') is-invalid @enderror" required>
-                                <option value="" disabled {{ old('type') ? '' : 'selected' }}>Seleccionar tipo</option>
-                                <option value="gasto" @selected(old('type') === 'gasto')>Gasto</option>
-                                <option value="ingreso" @selected(old('type') === 'ingreso')>Ingreso</option>
-                            </select>
-                            @error('type') <div class="invalid-feedback">{{ $message }}</div> @enderror
-                        </div>
-
-                        <div class="col-md-4">
-                            <label for="category_id" class="form-label">Categoría</label>
-                            <select name="category_id" id="category_id" class="form-select @error('category_id') is-invalid @enderror" required>
-                                <option value="" disabled {{ old('category_id') ? '' : 'selected' }}>Seleccionar categoría</option>
-                                @foreach ($categories as $category)
-                                    <option value="{{ $category->id }}" data-type="{{ $category->type }}"
-                                            @selected(old('category_id') == $category->id)>
-                                        {{ $category->name }}
-                                    </option>
-                                @endforeach
-                            </select>
-                            @error('category_id') <div class="invalid-feedback">{{ $message }}</div> @enderror
-                        </div>
-
-                        <div class="col-md-4">
-                            <label for="movement_date" class="form-label">Fecha</label>
-                            <input type="date" name="movement_date" id="movement_date"
-                                   value="{{ old('movement_date', now()->toDateString()) }}"
-                                   class="form-control @error('movement_date') is-invalid @enderror" required>
-                            @error('movement_date') <div class="invalid-feedback">{{ $message }}</div> @enderror
-                        </div>
-
-                        <div class="col-md-8">
-                            <label for="description" class="form-label">Descripción (opcional)</label>
-                            <input type="text" name="description" id="description"
-                                   value="{{ old('description') }}" placeholder="Ej. Almuerzo con el equipo"
-                                   class="form-control @error('description') is-invalid @enderror">
-                            @error('description') <div class="invalid-feedback">{{ $message }}</div> @enderror
-                        </div>
+                        @include('movements._fields', ['movement' => null])
 
                         <div class="col-12">
                             <button type="submit" class="btn btn-dark">Registrar movimiento</button>
@@ -128,19 +82,23 @@
         </div>
     </div>
 
-    {{-- CATEGORÍAS --}}
+    {{-- CATEGORIAS --}}
     <div class="tab-pane fade" id="categorias" role="tabpanel">
         <div class="card border-0 shadow-sm">
             <div class="card-body p-4">
-                <h2 class="h5 fw-bold mb-3">Gastos por categoría</h2>
+                <h2 class="h5 fw-bold mb-3">Gastos por categoria</h2>
 
                 @forelse ($gastosPorCategoria as $fila)
-                    @php $porcentaje = $gastos > 0 ? ($fila->total / $gastos) * 100 : 0; @endphp
+                    @php
+                        $porcentaje = $gastos > 0 ? ($fila->total / $gastos) * 100 : 0;
+                        $nombreBase = $categoryNames[$fila->category_id] ?? 'Sin categoria';
+                        $nombre     = $fila->custom_category ? $nombreBase . ': ' . $fila->custom_category : $nombreBase;
+                    @endphp
                     <div class="mb-3">
                         <div class="d-flex justify-content-between small mb-1">
-                            <span>{{ $categoryNames[$fila->category_id] ?? 'Sin categoría' }}</span>
+                            <span>{{ $nombre }}</span>
                             <span class="text-secondary">
-                                ${{ number_format($fila->total, 0, ',', '.') }} · {{ number_format($porcentaje, 0) }}%
+                                ${{ number_format($fila->total, 0, ',', '.') }} - {{ number_format($porcentaje, 0) }}%
                             </span>
                         </div>
                         <div class="progress" style="height: 6px;">
@@ -148,7 +106,7 @@
                         </div>
                     </div>
                 @empty
-                    <p class="text-secondary mb-0">Aún no tienes gastos registrados.</p>
+                    <p class="text-secondary mb-0">Aun no tienes gastos registrados.</p>
                 @endforelse
             </div>
         </div>
@@ -167,14 +125,21 @@
                                 <tr>
                                     <th>Fecha</th>
                                     <th>Tipo</th>
-                                    <th>Categoría</th>
-                                    <th>Descripción</th>
+                                    <th>Categoria</th>
+                                    <th>Descripcion</th>
                                     <th class="text-end">Monto</th>
                                     <th>Origen</th>
+                                    <th class="text-end">Acciones</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 @foreach ($movements as $m)
+                                    @php
+                                        $nombreCat = $categoryNames[$m->category_id] ?? '-';
+                                        if ($m->custom_category) {
+                                            $nombreCat = $nombreCat . ': ' . $m->custom_category;
+                                        }
+                                    @endphp
                                     <tr>
                                         <td>{{ \Carbon\Carbon::parse($m->movement_date)->format('d/m/Y') }}</td>
                                         <td>
@@ -184,12 +149,24 @@
                                                 <span class="badge bg-danger-subtle text-danger-emphasis">Gasto</span>
                                             @endif
                                         </td>
-                                        <td>{{ $categoryNames[$m->category_id] ?? '-' }}</td>
+                                        <td>{{ $nombreCat }}</td>
                                         <td class="text-secondary">{{ $m->description ?: '-' }}</td>
                                         <td class="text-end">
                                             {{ $m->type === 'ingreso' ? '+' : '-' }}${{ number_format($m->amount, 0, ',', '.') }}
                                         </td>
                                         <td class="text-secondary">{{ ucfirst($m->source) }}</td>
+                                        <td class="text-end text-nowrap">
+                                            <a href="{{ route('movements.edit', $m->id) }}"
+                                               class="btn btn-outline-secondary btn-sm">Editar</a>
+
+                                            <form action="{{ route('movements.destroy', $m->id) }}" method="POST"
+                                                  class="d-inline"
+                                                  onsubmit="return confirm('Seguro que quieres eliminar este movimiento?');">
+                                                @csrf
+                                                @method('DELETE')
+                                                <button type="submit" class="btn btn-outline-danger btn-sm">Eliminar</button>
+                                            </form>
+                                        </td>
                                     </tr>
                                 @endforeach
                             </tbody>
@@ -200,7 +177,7 @@
                         {{ $movements->fragment('historial')->links('pagination::bootstrap-5') }}
                     </div>
                 @else
-                    <p class="text-secondary mb-0">Aún no tienes movimientos registrados.</p>
+                    <p class="text-secondary mb-0">Aun no tienes movimientos registrados.</p>
                 @endif
             </div>
         </div>
@@ -209,26 +186,7 @@
 </div>
 
 <script>
-    // Mostrar solo las categorías que corresponden al tipo elegido
-    const typeSel = document.getElementById('type');
-    const catSel = document.getElementById('category_id');
-
-    function filtrarCategorias() {
-        const t = typeSel.value;
-        [...catSel.options].forEach(o => {
-            if (!o.value) return;
-            const ok = !t || !o.dataset.type || o.dataset.type === t;
-            o.hidden = !ok;
-            o.disabled = !ok;
-        });
-        if (catSel.selectedOptions[0] && catSel.selectedOptions[0].disabled) {
-            catSel.value = '';
-        }
-    }
-    typeSel.addEventListener('change', filtrarCategorias);
-    filtrarCategorias();
-
-    // Abrir la pestaña indicada en la URL (#historial, #categorias)
+    // Abrir la pestana indicada en la URL (#historial, #categorias)
     window.addEventListener('DOMContentLoaded', () => {
         const hash = window.location.hash;
         if (!hash) return;
