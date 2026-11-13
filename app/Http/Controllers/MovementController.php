@@ -2,44 +2,70 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use App\Models\Movement;
 use App\Models\Category;
+use App\Models\Movement;
+use Illuminate\Http\Request;
 
 class MovementController extends Controller
-{           
-    // Muestra el formulario en pantalla
-    public function create()
-    {
-        $categories = Category::where('is_active', true)->get();
-        return view('movements.create', compact('categories'));
-    }
-
-    // Muestra la lista del historial
+{
+    // Panel principal: resumen, formulario, categorías e historial (solo del usuario logueado)
     public function index()
     {
-        
-        $movements = Movement::where('user_id', auth()->id())
-                             ->orderBy('movement_date', 'desc')
-                             ->paginate(10);
+        $userId = auth()->id();
 
-        return view('movements.index', compact('movements'));
+        $ingresos = Movement::where('user_id', $userId)->where('type', 'ingreso')->sum('amount');
+        $gastos   = Movement::where('user_id', $userId)->where('type', 'gasto')->sum('amount');
+        $balance  = $ingresos - $gastos;
+
+        // Categorías disponibles para el formulario
+        $categories = Category::where('is_active', true)->orderBy('sort_order')->get();
+
+        // Nombres de todas las categorías (para mostrar en historial y resumen)
+        $categoryNames = Category::pluck('name', 'id');
+
+        // Gastos del usuario agrupados por categoría
+        $gastosPorCategoria = Movement::where('user_id', $userId)
+            ->where('type', 'gasto')
+            ->selectRaw('category_id, SUM(amount) as total')
+            ->groupBy('category_id')
+            ->orderByDesc('total')
+            ->get();
+
+        // Historial del usuario
+        $movements = Movement::where('user_id', $userId)
+            ->orderBy('movement_date', 'desc')
+            ->orderBy('id', 'desc')
+            ->paginate(10);
+
+        return view('movements.index', compact(
+            'ingresos', 'gastos', 'balance',
+            'categories', 'categoryNames',
+            'gastosPorCategoria', 'movements'
+        ));
     }
 
-
-    // Guarda los datos en la base de datos
+    // Guarda un movimiento a nombre del usuario logueado
     public function store(Request $request)
     {
-        Movement::create([
-            'user_id' => auth()->id(),
-            'category_id' => $request->category_id,
-            'type' => $request->type,
-            'amount' => $request->amount,
-            'movement_date' => $request->movement_date,
-            'description' => $request->description,
-            'source' => 'manual',
+        $data = $request->validate([
+            'type'          => 'required|in:ingreso,gasto',
+            'amount'        => 'required|numeric|min:0.01',
+            'category_id'   => 'required|exists:categories,id',
+            'movement_date' => 'required|date',
+            'description'   => 'nullable|string|max:255',
         ]);
 
-        return redirect()->back()->with('success', 'Movimiento registrado correctamente');
+        $movement = new Movement();
+        $movement->user_id       = auth()->id();   // siempre el usuario actual, nunca viene del formulario
+        $movement->type          = $data['type'];
+        $movement->amount        = $data['amount'];
+        $movement->category_id   = $data['category_id'];
+        $movement->movement_date = $data['movement_date'];
+        $movement->description   = $data['description'] ?? null;
+        $movement->source        = 'manual';
+        $movement->save();
+
+        return redirect(route('movements.index') . '#historial')
+            ->with('success', 'Movimiento registrado correctamente.');
     }
 }
