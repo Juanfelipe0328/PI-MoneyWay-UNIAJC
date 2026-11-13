@@ -10,4 +10,9 @@ class Movement extends Model
         'user_id', 'category_id', 'type', 'amount', 
         'movement_date', 'merchant', 'description', 'source', 'raw_message'
     ];
+    public function category()
+    {
+        return $this->belongsTo(Category::class);
+    }
+
 }

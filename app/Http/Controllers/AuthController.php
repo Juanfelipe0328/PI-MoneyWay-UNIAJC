@@ -24,7 +24,7 @@ class AuthController extends Controller
         if (Auth::attempt([...$credentials, 'status' => 'activa'])) {
             $request->session()->regenerate();
 
-            return redirect('/registrar');
+            return redirect()->route('dashboard');
         }
 
         // 3. Credenciales incorrectas (o cuenta suspendida/eliminada)
