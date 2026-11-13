@@ -101,3 +101,6 @@ INSERT INTO `categories` (`name`, `type`, `is_active`, `sort_order`, `created_at
 ('Entretenimiento', 'gasto', 1, 3, NOW(), NOW()),
 ('Salud', 'gasto', 1, 4, NOW(), NOW()),
 ('Ingresos', 'ingreso', 1, 5, NOW(), NOW());
+
+
+ALTER TABLE movements ADD COLUMN custom_category VARCHAR(60) NULL;
