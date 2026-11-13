@@ -59,6 +59,10 @@
 
                     <button type="submit" class="btn btn-success w-100" id="submit-btn">Entrar</button>
                 </form>
+
+                <p class="text-center text-secondary small mt-3 mb-0">
+                    ¿No tienes cuenta? <a href="{{ route('register') }}" class="link-success">Crea una</a>
+                </p>
             </div>
         </div>
 
