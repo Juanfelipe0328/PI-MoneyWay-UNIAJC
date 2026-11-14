@@ -460,6 +460,39 @@
             text-align: center;
             font-size: 13px;
         }
+                        
+        .category-highlight {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+            margin: 0 0 28px;
+            padding: 20px 23px;
+            border: 1px solid #dcece8;
+            border-radius: 19px;
+            background: #ffffff;
+        }
+
+        .category-highlight small {   
+            display: block;
+            color: #74837f;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .category-highlight h3 {
+            margin: 6px 0 0;
+            color: #277d74;
+            font-family: "Manrope", sans-serif;
+            font-size: 20px;
+        }
+        
+        .category-total {
+            color: #277d74;
+            font-family: "Manrope", sans-serif;
+            font-size: 20px;
+            font-weight: 800;
+        }      
 
         @media (max-width: 800px) {
             .sidebar {
@@ -635,6 +668,28 @@
                     <p>Con los datos registrados</p>
                 </article>
             </section>
+
+            <section class="category-highlight">
+                 @if($topExpenseCategory)
+                    <div>
+                        <small>Categoría con mayor gasto este mes</small>
+                        <h3>{{ $topExpenseCategory->name }}</h3>
+                    </div>
+                    
+                    <span class="category-total">
+                         {{ $currency($topExpenseCategory->total) }}
+                        
+                        </span>
+                        
+                        @else
+                        <div>
+                            <small>Categoría con mayor gasto este mes</small>
+                            <h3>Aún no hay gastos registrados</h3>
+                        </div>
+                        <span class="category-total">$ 0</span>
+                        
+                        @endif
+                    </section>
 
             <section class="section">
                 <div class="section-header">
