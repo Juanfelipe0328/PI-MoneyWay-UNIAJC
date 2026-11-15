@@ -96,7 +96,9 @@ CREATE TABLE `recommendations` (
 );
 
 
-ALTER TABLE movements ADD COLUMN custom_category VARCHAR(60) NULL
+ALTER TABLE movements ADD COLUMN custom_category VARCHAR(60) NULL;
+
+
 CREATE TABLE `sessions` (
     `id` VARCHAR(255) NOT NULL PRIMARY KEY,
     `user_id` BIGINT UNSIGNED NULL,
