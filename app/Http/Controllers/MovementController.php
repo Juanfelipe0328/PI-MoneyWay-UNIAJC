@@ -181,6 +181,7 @@ class MovementController extends Controller
             $category->is_active  = true;
             $category->sort_order = $order;
             $category->save();
+            
         }
     }
 

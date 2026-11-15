@@ -95,6 +95,24 @@ CREATE TABLE `recommendations` (
     FOREIGN KEY (`category_id`) REFERENCES `categories`(`id`)
 );
 
+
+ALTER TABLE movements ADD COLUMN custom_category VARCHAR(60) NULL
+CREATE TABLE `sessions` (
+    `id` VARCHAR(255) NOT NULL PRIMARY KEY,
+    `user_id` BIGINT UNSIGNED NULL,
+    `ip_address` VARCHAR(45) NULL,
+    `user_agent` TEXT NULL,
+    `payload` LONGTEXT NOT NULL,
+    `last_activity` INT NOT NULL,
+    INDEX `sessions_user_id_index` (`user_id`),
+    INDEX `sessions_last_activity_index` (`last_activity`)
+);
+
+
+ALTER TABLE categories DROP INDEX `name`;
+ALTER TABLE categories ADD UNIQUE KEY `categories_name_type_unique` (`name`, `type`);
+
+
 INSERT INTO `categories` (`name`, `type`, `is_active`, `sort_order`, `created_at`, `updated_at`) VALUES 
 ('Alimentación', 'gasto', 1, 1, NOW(), NOW()),
 ('Transporte', 'gasto', 1, 2, NOW(), NOW()),
@@ -103,4 +121,4 @@ INSERT INTO `categories` (`name`, `type`, `is_active`, `sort_order`, `created_at
 ('Ingresos', 'ingreso', 1, 5, NOW(), NOW());
 
 
-ALTER TABLE movements ADD COLUMN custom_category VARCHAR(60) NULL;
+;
