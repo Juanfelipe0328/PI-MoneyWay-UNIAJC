@@ -27,7 +27,7 @@ class AuthController extends Controller
         if (Auth::attempt([...$credentials, 'status' => 'activa'])) {
             $request->session()->regenerate();
 
-            return redirect('/registrar');
+            return redirect()->route('dashboard');
         }
 
         return back()
@@ -73,7 +73,7 @@ class AuthController extends Controller
         Auth::login($user);
         $request->session()->regenerate();
 
-        return redirect('/registrar');
+        return redirect()->route('dashboard');
     }
 
     // ---------------- LOGOUT ----------------
