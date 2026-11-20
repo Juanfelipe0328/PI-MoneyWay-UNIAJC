@@ -3,10 +3,11 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\MovementController;
+use App\Http\Controllers\DashboardController;
 
-// Inicio: manda al panel (si no hay sesión, Laravel lo lleva al login)
+// Inicio: manda al dashboard (si no hay sesión, Laravel lo lleva al login)
 Route::get('/', function () {
-    return redirect()->route('movements.index');
+    return redirect()->route('dashboard');
 });
 
 // Solo visitantes (sin sesión iniciada)
@@ -21,6 +22,10 @@ Route::middleware('guest')->group(function () {
 // Solo usuarios con sesión iniciada
 Route::middleware('auth')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+
+    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::post('/presupuestos', [DashboardController::class, 'storeBudget'])->name('budgets.store');
+    Route::delete('/presupuestos/{id}', [DashboardController::class, 'destroyBudget'])->name('budgets.destroy');
 
     Route::get('/registrar', [MovementController::class, 'index'])->name('movements.index');
     Route::post('/registrar', [MovementController::class, 'store'])->name('movements.store');
