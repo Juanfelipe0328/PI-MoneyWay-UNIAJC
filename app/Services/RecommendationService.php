@@ -16,6 +16,8 @@ class RecommendationService
      *   mes: string,
      *   ingresos: float,
      *   gastos: float,
+     *   gastosFijos?: float,          // parte de los gastos que viene de gastos fijos
+     *   esMesActual?: bool, diaActual?: int, diasMes?: int,
      *   gastosMesPasado: float,       // mismo periodo del mes anterior (hasta el mismo dia)
      *   categorias: array<string,float>, // gastos del mes por categoria, de mayor a menor
      *   presupuestos: array<int,array{nombre:string,limite:float,gastado:float,pct:float}>,
@@ -36,6 +38,7 @@ class RecommendationService
         $r = [];
         $ingresos = $d['ingresos'];
         $gastos   = $d['gastos'];
+        $fijos     = (float) ($d['gastosFijos'] ?? 0);
         $topNombre = array_key_first($d['categorias']);
         $topValor  = $topNombre !== null ? $d['categorias'][$topNombre] : 0;
 
@@ -63,9 +66,10 @@ class RecommendationService
                 $r[] = $this->item('success', 'Buen ritmo de ahorro',
                     'Estas ahorrando el ' . round($tasa) . '% de tus ingresos este mes. Mantenerlo es la mejor estrategia.');
             } else {
-                $extra = $topNombre !== null ? " Recortar un poco en {$topNombre} te ayudaria a lograrlo." : '';
+                $falta = max(0.0, $ingresos * 0.20 - ($ingresos - $gastos));
+                $extra = $topNombre !== null ? " Una buena opcion es recortar en {$topNombre}." : '';
                 $r[] = $this->item('info', 'Puedes ahorrar mas',
-                    'Estas ahorrando el ' . round(max($tasa, 0)) . '% de tus ingresos. Una meta saludable es llegar al 20%.' . $extra);
+                    'Estas ahorrando el ' . round(max($tasa, 0)) . '% de tus ingresos. Para llegar al 20% recomendado te faltan ' . $this->money($falta) . ' este mes.' . $extra);
             }
         }
 
@@ -78,12 +82,33 @@ class RecommendationService
             }
         }
 
+        // 3b. Gastos fijos muy pesados frente al ingreso
+        if ($ingresos > 0 && $fijos > 0) {
+            $pesoFijos = ($fijos / $ingresos) * 100;
+            if ($pesoFijos >= 50) {
+                $r[] = $this->item('warning', 'Tus gastos fijos pesan mucho',
+                    'Tus gastos fijos son el ' . round($pesoFijos) . '% de tus ingresos ('
+                    . $this->money($fijos) . '). Lo ideal es que no pasen del 50%: revisa si alguno se puede renegociar o cancelar.');
+            }
+        }
+
+        // 3c. Proyeccion al cierre del mes (solo mes en curso)
+        if (! empty($d['esMesActual']) && ($d['diaActual'] ?? 0) >= 5 && ($d['diasMes'] ?? 0) > 0 && $gastos <= $ingresos && $ingresos > 0) {
+            $variable   = max(0.0, $gastos - $fijos);
+            $proyectado = $fijos + ($variable / $d['diaActual']) * $d['diasMes'];
+            if ($proyectado > $ingresos) {
+                $r[] = $this->item('warning', 'Vas a cerrar el mes en rojo',
+                    'A este ritmo tus gastos llegarian a ' . $this->money($proyectado)
+                    . ' al final del mes, por encima de tus ingresos (' . $this->money($ingresos) . '). Baja el gasto diario para evitarlo.');
+            }
+        }
+
         // 4. Comparacion con el mismo periodo del mes pasado
         if ($d['gastosMesPasado'] > 0) {
             $cambio = (($gastos - $d['gastosMesPasado']) / $d['gastosMesPasado']) * 100;
             if ($cambio >= 20) {
                 $r[] = $this->item('warning', 'Tus gastos suben',
-                    'Llevas un ' . round($cambio) . '% mas de gasto que en el mismo periodo del mes pasado.');
+                    'Llevas un ' . round($cambio) . '% mas de gasto que en el mismo periodo del mes anterior. Revisa en que categoria subio.');
             } elseif ($cambio <= -10) {
                 $r[] = $this->item('success', 'Estas gastando menos',
                     'Llevas un ' . round(abs($cambio)) . '% menos de gasto que en el mismo periodo del mes pasado.');

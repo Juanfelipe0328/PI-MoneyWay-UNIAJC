@@ -10,10 +10,19 @@
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
     </div>
 @endif
+@if (session('error'))
+    <div class="alert alert-warning alert-dismissible fade show" role="alert">
+        {{ session('error') }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+    </div>
+@endif
 
-<div class="mb-4">
-    <h1 class="h4 fw-bold mb-1">Hola, {{ auth()->user()->name }}</h1>
-    <p class="text-secondary mb-0">Este es el resumen de tus finanzas.</p>
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+    <div>
+        <h1 class="h4 fw-bold mb-1">Hola, {{ auth()->user()->name }}</h1>
+        <p class="text-secondary mb-0">Resumen de {{ $mesNombre }}. Tu sueldo y tus gastos fijos se registran solos.</p>
+    </div>
+    @include('partials._month_nav', ['ruta' => 'movements.index'])
 </div>
 
 {{-- Resumen --}}
@@ -21,7 +30,7 @@
     <div class="col-md-4">
         <div class="card border-0 bg-success-subtle text-success-emphasis h-100">
             <div class="card-body">
-                <div class="small">Ingresos totales</div>
+                <div class="small">Ingresos del mes</div>
                 <div class="fs-3 fw-semibold">${{ number_format($ingresos, 0, ',', '.') }}</div>
             </div>
         </div>
@@ -29,7 +38,7 @@
     <div class="col-md-4">
         <div class="card border-0 bg-danger-subtle text-danger-emphasis h-100">
             <div class="card-body">
-                <div class="small">Gastos totales</div>
+                <div class="small">Gastos del mes</div>
                 <div class="fs-3 fw-semibold">${{ number_format($gastos, 0, ',', '.') }}</div>
             </div>
         </div>
@@ -37,7 +46,7 @@
     <div class="col-md-4">
         <div class="card border-0 bg-secondary-subtle text-body-emphasis h-100">
             <div class="card-body">
-                <div class="small">Balance neto</div>
+                <div class="small">Balance del mes</div>
                 <div class="fs-3 fw-semibold">
                     {{ $balance < 0 ? '-' : '' }}${{ number_format(abs($balance), 0, ',', '.') }}
                 </div>
@@ -86,7 +95,7 @@
     <div class="tab-pane fade" id="categorias" role="tabpanel">
         <div class="card border-0 shadow-sm">
             <div class="card-body p-4">
-                <h2 class="h5 fw-bold mb-3">Gastos por categoria</h2>
+                <h2 class="h5 fw-bold mb-3">Gastos por categoria - {{ $mesNombre }}</h2>
 
                 @forelse ($gastosPorCategoria as $fila)
                     @php
@@ -106,7 +115,7 @@
                         </div>
                     </div>
                 @empty
-                    <p class="text-secondary mb-0">Aun no tienes gastos registrados.</p>
+                    <p class="text-secondary mb-0">No tienes gastos registrados en este mes.</p>
                 @endforelse
             </div>
         </div>
@@ -116,7 +125,7 @@
     <div class="tab-pane fade" id="historial" role="tabpanel">
         <div class="card border-0 shadow-sm">
             <div class="card-body p-4">
-                <h2 class="h5 fw-bold mb-3">Historial de transacciones</h2>
+                <h2 class="h5 fw-bold mb-3">Historial - {{ $mesNombre }}</h2>
 
                 @if ($movements->count())
                     <div class="table-responsive">
@@ -154,18 +163,26 @@
                                         <td class="text-end">
                                             {{ $m->type === 'ingreso' ? '+' : '-' }}${{ number_format($m->amount, 0, ',', '.') }}
                                         </td>
-                                        <td class="text-secondary">{{ ucfirst($m->source) }}</td>
+                                        <td class="text-secondary">
+                                            @if ($m->recurring_id)
+                                                <span class="badge bg-primary-subtle text-primary-emphasis">Fijo</span>
+                                            @else
+                                                {{ ucfirst($m->source) }}
+                                            @endif
+                                        </td>
                                         <td class="text-end text-nowrap">
                                             <a href="{{ route('movements.edit', $m->id) }}"
                                                class="btn btn-outline-secondary btn-sm">Editar</a>
 
-                                            <form action="{{ route('movements.destroy', $m->id) }}" method="POST"
-                                                  class="d-inline"
-                                                  onsubmit="return confirm('Seguro que quieres eliminar este movimiento?');">
-                                                @csrf
-                                                @method('DELETE')
-                                                <button type="submit" class="btn btn-outline-danger btn-sm">Eliminar</button>
-                                            </form>
+                                            @if (! $m->recurring_id)
+                                                <form action="{{ route('movements.destroy', $m->id) }}" method="POST"
+                                                      class="d-inline"
+                                                      onsubmit="return confirm('Seguro que quieres eliminar este movimiento?');">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button type="submit" class="btn btn-outline-danger btn-sm">Eliminar</button>
+                                                </form>
+                                            @endif
                                         </td>
                                     </tr>
                                 @endforeach
@@ -177,7 +194,7 @@
                         {{ $movements->fragment('historial')->links('pagination::bootstrap-5') }}
                     </div>
                 @else
-                    <p class="text-secondary mb-0">Aun no tienes movimientos registrados.</p>
+                    <p class="text-secondary mb-0">No tienes movimientos en este mes.</p>
                 @endif
             </div>
         </div>

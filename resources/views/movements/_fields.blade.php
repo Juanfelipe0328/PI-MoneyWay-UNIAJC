@@ -11,10 +11,14 @@
 
 <div class="col-md-4">
     <label for="amount" class="form-label">Valor (COP)</label>
-    <input type="number" step="0.01" min="0" name="amount" id="amount"
-           value="{{ old('amount', $movement->amount ?? '') }}" placeholder="Ej. 45000"
-           class="form-control @error('amount') is-invalid @enderror" required>
-    @error('amount') <div class="invalid-feedback">{{ $message }}</div> @enderror
+    <div class="input-group">
+        <span class="input-group-text">$</span>
+        <input type="text" name="amount" id="amount" data-money
+               value="{{ old('amount', $movement->amount ?? '') !== '' ? number_format((float) old('amount', $movement->amount ?? 0), 0, ',', '.') : '' }}"
+               placeholder="Ej. 45.000"
+               class="form-control @error('amount') is-invalid @enderror" required>
+    </div>
+    @error('amount') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
 </div>
 
 <div class="col-md-4">

@@ -2,21 +2,36 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\HandlesMoneyAndMonths;
 use App\Models\Category;
 use App\Models\Movement;
+use App\Services\RecurringService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class MovementController extends Controller
 {
-    // Panel principal: resumen, formulario, categorias e historial (solo del usuario logueado)
-    public function index()
+    use HandlesMoneyAndMonths;
+
+    // Panel principal: resumen del mes, formulario, categorias e historial (solo del usuario logueado)
+    public function index(Request $request, RecurringService $recurrentes)
     {
         $userId = auth()->id();
+        $recurrentes->sync($userId, $this->hoy());
 
-        $ingresos = Movement::where('user_id', $userId)->where('type', 'ingreso')->sum('amount');
-        $gastos   = Movement::where('user_id', $userId)->where('type', 'gasto')->sum('amount');
+        // Mes elegido (?mes=2026-10). Si no viene, el mes actual.
+        $inicioMes = $this->parseMonth($request->query('mes'));
+        $finMes    = $inicioMes->copy()->endOfMonth();
+        $rango     = [$inicioMes->toDateString(), $finMes->toDateString()];
+
+        $mes       = $inicioMes->format('Y-m');
+        $mesNombre = ucfirst($inicioMes->translatedFormat('F Y'));
+        $mesPrev   = $inicioMes->copy()->subMonthNoOverflow()->format('Y-m');
+        $mesNext   = $inicioMes->copy()->addMonthNoOverflow()->format('Y-m');
+
+        $ingresos = (float) Movement::where('user_id', $userId)->where('type', 'ingreso')->whereBetween('movement_date', $rango)->sum('amount');
+        $gastos   = (float) Movement::where('user_id', $userId)->where('type', 'gasto')->whereBetween('movement_date', $rango)->sum('amount');
         $balance  = $ingresos - $gastos;
 
         $allCategories = $this->loadCategories();
@@ -24,25 +39,29 @@ class MovementController extends Controller
         $categoryNames = $allCategories->pluck('name', 'id');
         $otherIds      = $this->otherCategoryIds($allCategories);
 
-        // Gastos del usuario agrupados por categoria.
+        // Gastos del mes agrupados por categoria.
         // Las categorias "Otro" se separan por el nombre que escribio el usuario.
         $gastosPorCategoria = Movement::where('user_id', $userId)
             ->where('type', 'gasto')
+            ->whereBetween('movement_date', $rango)
             ->selectRaw('category_id, custom_category, SUM(amount) as total')
             ->groupBy('category_id', 'custom_category')
             ->orderByDesc('total')
             ->get();
 
-        // Historial del usuario
+        // Historial del mes
         $movements = Movement::where('user_id', $userId)
+            ->whereBetween('movement_date', $rango)
             ->orderBy('movement_date', 'desc')
             ->orderBy('id', 'desc')
-            ->paginate(10);
+            ->paginate(15)
+            ->withQueryString();
 
         return view('movements.index', compact(
             'ingresos', 'gastos', 'balance',
             'categories', 'categoryNames', 'otherIds',
-            'gastosPorCategoria', 'movements'
+            'gastosPorCategoria', 'movements',
+            'mes', 'mesNombre', 'mesPrev', 'mesNext'
         ));
     }
 
@@ -57,7 +76,7 @@ class MovementController extends Controller
         $movement->source = 'manual';
         $movement->save();
 
-        return redirect(route('movements.index') . '#historial')
+        return redirect(route('movements.index', ['mes' => substr($data['movement_date'], 0, 7)]) . '#historial')
             ->with('success', 'Movimiento registrado correctamente.');
     }
 
@@ -82,7 +101,7 @@ class MovementController extends Controller
         $this->fillMovement($movement, $data);
         $movement->save();
 
-        return redirect(route('movements.index') . '#historial')
+        return redirect(route('movements.index', ['mes' => substr($data['movement_date'], 0, 7)]) . '#historial')
             ->with('success', 'Movimiento actualizado correctamente.');
     }
 
@@ -90,9 +109,17 @@ class MovementController extends Controller
     public function destroy($id)
     {
         $movement = Movement::where('user_id', auth()->id())->findOrFail($id);
+        $mes = substr((string) $movement->movement_date, 0, 7);
+
+        // Si lo borraran, el fijo lo volveria a crear. Se maneja desde "Fijos".
+        if ($movement->recurring_id !== null) {
+            return redirect(route('movements.index', ['mes' => $mes]) . '#historial')
+                ->with('error', 'Este movimiento viene de un fijo y no se borra desde aqui. Pausalo o ponle mes final en "Fijos". Si solo cambio el valor este mes, usa Editar.');
+        }
+
         $movement->delete();
 
-        return redirect(route('movements.index') . '#historial')
+        return redirect(route('movements.index', ['mes' => $mes]) . '#historial')
             ->with('success', 'Movimiento eliminado correctamente.');
     }
 
@@ -103,12 +130,15 @@ class MovementController extends Controller
     // Validacion compartida por store() y update()
     private function validateMovement(Request $request): array
     {
+        // El valor llega como "10.000": se limpia antes de validar
+        $request->merge(['amount' => $this->cleanMoney($request->input('amount'))]);
+
         $otherIds = $this->otherCategoryIds(Category::all(['id', 'name']));
         $isOther  = in_array((int) $request->input('category_id'), $otherIds, true);
 
         $data = $request->validate([
             'type'   => 'required|in:ingreso,gasto',
-            'amount' => 'required|numeric|min:0.01',
+            'amount' => 'required|numeric|min:0.01|max:9999999999',
             // La categoria debe estar activa y ser del mismo tipo que el movimiento
             'category_id' => [
                 'required',
@@ -121,6 +151,10 @@ class MovementController extends Controller
             // Solo es obligatoria cuando se elige "Otro"
             'custom_category' => [Rule::requiredIf($isOther), 'nullable', 'string', 'max:60'],
         ], [
+            'amount.required'          => 'Escribe el valor.',
+            'amount.numeric'           => 'El valor debe ser un numero.',
+            'amount.min'               => 'El valor debe ser mayor a cero.',
+            'amount.max'               => 'El valor es demasiado grande.',
             'custom_category.required' => 'Escribe cual es la categoria.',
         ]);
 
@@ -140,59 +174,5 @@ class MovementController extends Controller
         $movement->custom_category = $data['custom_category'];
         $movement->movement_date   = $data['movement_date'];
         $movement->description     = $data['description'] ?? null;
-    }
-
-    // Asegura que existan las categorias base y devuelve todas ordenadas
-    private function loadCategories()
-    {
-        $this->ensureDefaultCategories();
-
-        return Category::orderBy('sort_order')->orderBy('id')->get();
-    }
-
-    // Crea (solo si faltan) Sueldo y otros tipos de ingreso, y "Otro" para ingresos y gastos
-    private function ensureDefaultCategories(): void
-    {
-        $existing = Category::all(['name', 'type']);
-
-        // [nombre, tipo, orden, nombres equivalentes que ya cuentan como existentes]
-        $defaults = [
-            ['Sueldo',                'ingreso', 1,  ['sueldo', 'salario']],
-            ['Trabajo independiente', 'ingreso', 2,  ['trabajo independiente', 'freelance']],
-            ['Ventas',                'ingreso', 3,  ['ventas', 'venta']],
-            ['Arriendos',             'ingreso', 4,  ['arriendos', 'arriendo']],
-            ['Otro',                  'ingreso', 98, ['otro', 'otros']],
-            ['Otro',                  'gasto',   99, ['otro', 'otros']],
-        ];
-
-        foreach ($defaults as [$name, $type, $order, $aliases]) {
-            $found = $existing->first(function ($c) use ($type, $aliases) {
-                return $c->type === $type
-                    && in_array(mb_strtolower(trim($c->name)), $aliases, true);
-            });
-
-            if ($found) {
-                continue;
-            }
-
-            $category = new Category();
-            $category->name       = $name;
-            $category->type       = $type;
-            $category->is_active  = true;
-            $category->sort_order = $order;
-            $category->save();
-            
-        }
-    }
-
-    // IDs de las categorias que se llaman "Otro" / "Otros"
-    private function otherCategoryIds($categories): array
-    {
-        return $categories
-            ->filter(fn ($c) => in_array(mb_strtolower(trim($c->name)), ['otro', 'otros'], true))
-            ->pluck('id')
-            ->map(fn ($id) => (int) $id)
-            ->values()
-            ->all();
     }
 }
