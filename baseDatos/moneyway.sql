@@ -123,4 +123,53 @@ INSERT INTO `categories` (`name`, `type`, `is_active`, `sort_order`, `created_at
 ('Ingresos', 'ingreso', 1, 5, NOW(), NOW());
 
 
-;
+CREATE TABLE IF NOT EXISTS `recurring_items` (
+    `id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    `user_id` BIGINT UNSIGNED NOT NULL,
+    `category_id` BIGINT UNSIGNED NOT NULL,
+    `type` VARCHAR(20) NOT NULL,                 
+    `amount` DECIMAL(12,2) NOT NULL,
+    `description` VARCHAR(255) NOT NULL,         
+    `custom_category` VARCHAR(60) NULL,
+    `day_of_month` TINYINT UNSIGNED NOT NULL DEFAULT 1,  
+    `start_month` VARCHAR(7) NOT NULL,           
+    `end_month` VARCHAR(7) NULL,                 
+    `is_active` BOOLEAN NOT NULL DEFAULT TRUE,
+    `created_at` TIMESTAMP NULL DEFAULT NULL,
+    `updated_at` TIMESTAMP NULL DEFAULT NULL,
+    FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`category_id`) REFERENCES `categories`(`id`)
+);
+
+
+ALTER TABLE `movements`
+    ADD COLUMN `recurring_id` BIGINT UNSIGNED NULL,
+    ADD COLUMN `recurring_period` VARCHAR(7) NULL,
+    ADD UNIQUE KEY `movements_recurring_unique` (`recurring_id`, `recurring_period`),
+    ADD CONSTRAINT `movements_recurring_fk` FOREIGN KEY (`recurring_id`)
+        REFERENCES `recurring_items`(`id`) ON DELETE SET NULL;
+
+
+ALTER TABLE `movements` ADD INDEX `movements_user_date_index` (`user_id`, `movement_date`);
+
+ALTER TABLE `movements`
+    ADD COLUMN `recurring_id` BIGINT UNSIGNED NULL,
+    ADD COLUMN `recurring_period` VARCHAR(7) NULL;
+
+ALTER TABLE `movements`
+    ADD UNIQUE KEY `movements_recurring_unique` (`recurring_id`, `recurring_period`);
+
+ALTER TABLE `movements`
+    ADD INDEX `movements_user_date_index` (`user_id`, `movement_date`);
+
+ALTER TABLE `movements` ADD COLUMN `recurring_period` VARCHAR(7) NULL;
+
+
+--Eliminar la llave foránea que apunta a la tabla equivocada
+ALTER TABLE movements DROP FOREIGN KEY fk_movements_recurring;
+
+--Crear la llave foránea apuntando a recurring_items
+ALTER TABLE movements 
+ADD CONSTRAINT fk_movements_recurring 
+FOREIGN KEY (recurring_id) REFERENCES recurring_items(id) 
+ON DELETE SET NULL;
