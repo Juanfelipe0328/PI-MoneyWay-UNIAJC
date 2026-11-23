@@ -77,6 +77,9 @@
     $money = fn ($n) => '$' . number_format(abs($n), 0, ',', '.');
 @endphp
 
+@if (session('error'))
+    <div class="alert alert-warning">{{ session('error') }}</div>
+@endif
 @if (session('success'))
     <div class="alert alert-success alert-dismissible fade show" role="alert">
         {{ session('success') }}
@@ -91,7 +94,11 @@
 
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
     <h1 class="h4 fw-bold mb-0">Dashboard financiero - {{ $mesNombre }}</h1>
-    <a href="{{ route('movements.index') }}" class="btn btn-success btn-sm">+ Registrar movimiento</a>
+    <div class="d-flex flex-wrap align-items-center gap-2">
+        @include('partials._month_nav', ['ruta' => 'dashboard'])
+        <a href="{{ route('statement.index', ['mes' => $mes]) }}" class="btn btn-outline-secondary btn-sm">Ver extracto</a>
+        <a href="{{ route('movements.index') }}" class="btn btn-success btn-sm">+ Registrar movimiento</a>
+    </div>
 </div>
 
 {{-- Tarjetas de resumen --}}
@@ -123,7 +130,7 @@
             <div class="d-flex align-items-center gap-3">
                 <span class="stat-icon">$</span>
                 <div>
-                    <div class="stat-label">Saldo disponible</div>
+                    <div class="stat-label">{{ $esMesActual ? 'Saldo disponible' : 'Saldo al cierre del mes' }}</div>
                     <div class="stat-value">{{ $saldo < 0 ? '-' : '' }}{{ $money($saldo) }}</div>
                 </div>
             </div>
@@ -155,13 +162,13 @@
                     </ul>
                 </div>
             @else
-                <p class="text-secondary mb-0">Aún no tienes gastos este mes. Cuando registres uno, aquí verás en qué se va tu dinero.</p>
+                <p class="text-secondary mb-0">No hay gastos en este mes. Cuando registres uno, aquí verás en qué se va tu dinero.</p>
             @endif
         </div>
     </div>
     <div class="col-lg-6">
         <div class="mw-card">
-            <h2>Evolución de ingresos y gastos (últimos 7 días)</h2>
+            <h2>Ingresos y gastos (últimos 7 días del mes)</h2>
             <div class="chart-box"><canvas id="chartSemana"></canvas></div>
         </div>
     </div>
@@ -171,7 +178,7 @@
 <div class="row g-3 mb-3">
     <div class="col-lg-7">
         <div class="mw-card">
-            <h2>Últimos movimientos</h2>
+            <h2>Últimos movimientos del mes</h2>
             @if ($ultimos->count())
                 <div class="table-responsive">
                     <table class="table table-borderless align-middle mov-table mb-0">
@@ -201,10 +208,10 @@
                     </table>
                 </div>
                 <div class="text-center mt-3">
-                    <a href="{{ route('movements.index') }}#historial" class="btn btn-outline-secondary btn-sm">Ver todo el historial</a>
+                    <a href="{{ route('movements.index', ['mes' => $mes]) }}#historial" class="btn btn-outline-secondary btn-sm">Ver todo el historial</a>
                 </div>
             @else
-                <p class="text-secondary mb-0">Aún no hay movimientos. Registra el primero desde "Registrar movimiento".</p>
+                <p class="text-secondary mb-0">No hay movimientos en este mes. Registra el primero desde "Registrar movimiento".</p>
             @endif
         </div>
     </div>
@@ -250,6 +257,7 @@
 
             <form action="{{ route('budgets.store') }}" method="POST" class="row g-2 mt-2">
                 @csrf
+                <input type="hidden" name="mes" value="{{ $mes }}">
                 <div class="col-sm-5">
                     <select name="category_id" class="form-select form-select-sm" required>
                         <option value="" disabled selected>Categoría</option>
@@ -259,8 +267,8 @@
                     </select>
                 </div>
                 <div class="col-sm-4">
-                    <input type="number" name="amount_limit" class="form-control form-control-sm"
-                           placeholder="Límite $" min="1" step="1" required>
+                    <input type="text" name="amount_limit" class="form-control form-control-sm" data-money
+                           placeholder="Límite $ (ej. 500.000)" required>
                 </div>
                 <div class="col-sm-3 d-grid">
                     <button type="submit" class="btn btn-success btn-sm">Guardar</button>

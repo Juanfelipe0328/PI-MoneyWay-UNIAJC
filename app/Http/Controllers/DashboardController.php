@@ -2,31 +2,37 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\HandlesMoneyAndMonths;
 use App\Models\Budget;
 use App\Models\Category;
 use App\Models\Movement;
 use App\Services\RecommendationService;
+use App\Services\RecurringService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 class DashboardController extends Controller
 {
-    // El proyecto es colombiano: "hoy" y "este mes" se calculan con esta zona horaria
-    // (la app guarda en UTC y, de noche, UTC ya esta en el dia siguiente).
-    private const TZ = 'America/Bogota';
+    use HandlesMoneyAndMonths;
 
     // Colores de la dona (mismo orden en la leyenda y en la grafica)
     private const PALETTE = ['#22c55e', '#3b82f6', '#a855f7', '#f59e0b', '#ef4444', '#94a3b8'];
 
-    public function index(RecommendationService $recomendador)
+    public function index(Request $request, RecommendationService $recomendador, RecurringService $recurrentes)
     {
         $userId = auth()->id();
 
-        $hoy        = Carbon::now(self::TZ)->startOfDay()->locale('es');
-        $inicioMes  = $hoy->copy()->startOfMonth();
-        $finMes     = $hoy->copy()->endOfMonth();
-        $mesNombre  = ucfirst($hoy->translatedFormat('F Y'));
+        $hoy = $this->hoy();
+        // Sueldo y gastos fijos del mes se registran solos antes de calcular nada
+        $recurrentes->sync($userId, $hoy);
+
+        // Mes elegido (?mes=2026-10). Si no viene, el mes actual.
+        $inicioMes   = $this->parseMonth($request->query('mes'));
+        $finMes      = $inicioMes->copy()->endOfMonth();
+        $mes         = $inicioMes->format('Y-m');
+        $esMesActual = $mes === $hoy->format('Y-m');
+        $mesNombre   = ucfirst($inicioMes->translatedFormat('F Y'));
 
         $nombres = Category::pluck('name', 'id');
 
@@ -38,9 +44,13 @@ class DashboardController extends Controller
         $ingresos = (float) $delMes->where('type', 'ingreso')->sum('amount');
         $gastos   = (float) $delMes->where('type', 'gasto')->sum('amount');
 
-        // Saldo disponible = todo lo que ha entrado menos todo lo que ha salido
-        $saldo = (float) Movement::where('user_id', $userId)->where('type', 'ingreso')->sum('amount')
-               - (float) Movement::where('user_id', $userId)->where('type', 'gasto')->sum('amount');
+        // Saldo al cierre del mes elegido = todo lo que habia entrado menos lo que habia salido hasta esa fecha
+        $saldo = (float) Movement::where('user_id', $userId)->where('type', 'ingreso')
+                    ->where('movement_date', '<=', $finMes->toDateString())->sum('amount')
+               - (float) Movement::where('user_id', $userId)->where('type', 'gasto')
+                    ->where('movement_date', '<=', $finMes->toDateString())->sum('amount');
+
+        $gastosFijos = (float) $delMes->where('type', 'gasto')->whereNotNull('recurring_id')->sum('amount');
 
         // ---- Gastos por categoria (las "Otro" se separan por el nombre que escribio el usuario) ----
         $porCategoria = $delMes->where('type', 'gasto')
@@ -67,10 +77,11 @@ class DashboardController extends Controller
             ];
         })->all();
 
-        // ---- Ultimos 7 dias (ingresos vs gastos) ----
-        $desde = $hoy->copy()->subDays(6);
+        // ---- Ultimos 7 dias del mes elegido (ingresos vs gastos) ----
+        $fin   = $esMesActual ? $hoy->copy() : $finMes->copy()->startOfDay();
+        $desde = $fin->copy()->subDays(6);
         $semana = Movement::where('user_id', $userId)
-            ->whereBetween('movement_date', [$desde->toDateString(), $hoy->toDateString()])
+            ->whereBetween('movement_date', [$desde->toDateString(), $fin->toDateString()])
             ->get()
             ->groupBy(fn ($m) => Carbon::parse($m->movement_date)->toDateString());
 
@@ -88,6 +99,7 @@ class DashboardController extends Controller
 
         // ---- Ultimos movimientos ----
         $ultimos = Movement::where('user_id', $userId)
+            ->whereBetween('movement_date', [$inicioMes->toDateString(), $finMes->toDateString()])
             ->orderBy('movement_date', 'desc')
             ->orderBy('id', 'desc')
             ->limit(5)
@@ -107,7 +119,7 @@ class DashboardController extends Controller
             });
 
         // ---- Presupuestos del mes ----
-        $mesClave = $hoy->format('Y-m');
+        $mesClave = $mes;
         $gastadoPorCategoria = $delMes->where('type', 'gasto')->groupBy('category_id')
             ->map(fn ($g) => (float) $g->sum('amount'));
 
@@ -138,9 +150,11 @@ class DashboardController extends Controller
             ->orderBy('sort_order')->orderBy('id')->get(['id', 'name']);
 
         // ---- Recomendaciones ----
-        // Se compara con el MISMO periodo del mes anterior (hasta el mismo dia), no con el mes completo.
+        // Mes actual: se compara con el MISMO periodo del mes anterior (hasta el mismo dia).
+        // Mes pasado: se compara el mes completo contra el anterior.
+        $diaCorte   = $esMesActual ? $hoy->day : $finMes->day;
         $inicioPrev = $inicioMes->copy()->subMonthNoOverflow()->startOfMonth();
-        $corte      = $inicioPrev->copy()->addDays($hoy->day - 1);
+        $corte      = $inicioPrev->copy()->addDays($diaCorte - 1);
         $finPrev    = $inicioPrev->copy()->endOfMonth();
         if ($corte->gt($finPrev)) {
             $corte = $finPrev;
@@ -153,23 +167,34 @@ class DashboardController extends Controller
             'mes'             => $mesNombre,
             'ingresos'        => $ingresos,
             'gastos'          => $gastos,
+            'gastosFijos'     => $gastosFijos,
             'gastosMesPasado' => $gastosMesPasado,
             'categorias'      => $porCategoria->all(),
             'presupuestos'    => $presupuestos,
             'hayMovimientos'  => $delMes->isNotEmpty(),
+            'esMesActual'     => $esMesActual,
+            'diaActual'       => $diaCorte,
+            'diasMes'         => $inicioMes->daysInMonth,
         ]);
+
+        $mesPrev = $inicioMes->copy()->subMonthNoOverflow()->format('Y-m');
+        $mesNext = $inicioMes->copy()->addMonthNoOverflow()->format('Y-m');
 
         return view('dashboard.index', compact(
             'mesNombre', 'ingresos', 'gastos', 'saldo',
             'dona', 'etiquetas', 'serieIngresos', 'serieGastos',
             'ultimos', 'presupuestos', 'limiteTotal', 'gastadoTotal', 'pctTotal',
-            'categoriasGasto', 'recomendaciones'
+            'categoriasGasto', 'recomendaciones',
+            'mes', 'mesPrev', 'mesNext', 'esMesActual'
         ));
     }
 
-    // Crea o actualiza el presupuesto del mes actual para una categoria
+    // Crea o actualiza el presupuesto del mes que se esta viendo para una categoria
     public function storeBudget(Request $request)
     {
+        $request->merge(['amount_limit' => $this->cleanMoney($request->input('amount_limit'))]);
+        $mes = $this->parseMonth($request->input('mes'))->format('Y-m');
+
         $data = $request->validate([
             'category_id' => [
                 'required',
@@ -189,19 +214,21 @@ class DashboardController extends Controller
             [
                 'user_id'     => auth()->id(),
                 'category_id' => $data['category_id'],
-                'month'       => Carbon::now(self::TZ)->format('Y-m'),
+                'month'       => $mes,
             ],
             ['amount_limit' => $data['amount_limit']]
         );
 
-        return redirect()->route('dashboard')->with('success', 'Presupuesto guardado.');
+        return redirect()->route('dashboard', ['mes' => $mes])->with('success', 'Presupuesto guardado.');
     }
 
     // Quita un presupuesto (solo si es del usuario logueado)
-    public function destroyBudget($id)
+    public function destroyBudget(Request $request, $id)
     {
-        Budget::where('user_id', auth()->id())->findOrFail($id)->delete();
+        $budget = Budget::where('user_id', auth()->id())->findOrFail($id);
+        $mes = $budget->month;
+        $budget->delete();
 
-        return redirect()->route('dashboard')->with('success', 'Presupuesto eliminado.');
+        return redirect()->route('dashboard', ['mes' => $mes])->with('success', 'Presupuesto eliminado.');
     }
 }
